@@ -1,4 +1,4 @@
-Shader "Custom/River"
+Shader "Custom/Water Shore"
 {
     Properties
     {
@@ -9,7 +9,7 @@ Shader "Custom/River"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent+1" }
+        Tags { "RenderType"="Transparent" "Queue"="Transparent" }
         LOD 200
 
         CGPROGRAM
@@ -26,6 +26,7 @@ Shader "Custom/River"
         struct Input
         {
             float2 uv_MainTex;
+            float3 worldPos;
         };
 
         half _Glossiness;
@@ -41,9 +42,12 @@ Shader "Custom/River"
 
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
-            float river = River(IN.uv_MainTex, _MainTex);
+            float shore = IN.uv_MainTex.y;
+            float foam = Foam(shore, IN.worldPos.xz, _MainTex);
+            float waves = Waves(IN.worldPos.xz, _MainTex);
+            waves *= 1 - shore;
 
-            fixed4 c = saturate(_Color + river);
+            fixed4 c = saturate(_Color + max(foam, waves));
             o.Albedo = c.rgb;
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
