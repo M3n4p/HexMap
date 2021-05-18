@@ -29,7 +29,7 @@ public class HexCell : MonoBehaviour
 
     public HexGridChunk chunk;
 
-    public Vector4 Position
+    public Vector3 Position
     {
         get { return transform.localPosition; }
     }
@@ -54,13 +54,14 @@ public class HexCell : MonoBehaviour
             uiPosition.z = -position.y;
             uiRect.localPosition = uiPosition;
 
-            if(hasOutgoingRiver && elevation < GetNeighbor(outgoingRiver).elevation)
+            ValidateRivers();
+
+            for(int i = 0; i < roads.Length; i++)
             {
-                RemoveOutgoingRiver();
-            }
-            if(hasIncomingRiver && elevation > GetNeighbor(incomingRiver).elevation)
-            {
-                RemoveIncomingRiver();
+                if(roads[i] && GetElevationDifference((HexDirection)i) > i)
+                {
+                    SetRoad(i, false);
+                }
             }
 
             Refresh();
@@ -112,7 +113,65 @@ public class HexCell : MonoBehaviour
 
     public float RiverSurfaceY
     {
-        get { return (elevation + HexMetrics.riverSurfaceElevationOffset) * HexMetrics.elevationStep; }
+        get { return (elevation + HexMetrics.waterElevationOffset) * HexMetrics.elevationStep; }
+    }
+
+    public HexDirection RiverBeginOrEndDirection
+    {
+        get
+        {
+            return hasIncomingRiver ? incomingRiver : outgoingRiver;
+        }
+    }
+
+    [SerializeField]
+    bool[] roads;
+
+    public bool HasRoadThroughEdge(HexDirection direction)
+    {
+        return roads[(int)direction];
+    }
+
+    public bool HasRoads
+    {
+        get
+        {
+            for(int i = 0; i < roads.Length; i++)
+            {
+                if(roads[i])
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    int waterLevel;
+
+    public int WaterLevel
+    {
+        get { return waterLevel; }
+        set
+        {
+            if(waterLevel == value)
+            {
+                return;
+            }
+            waterLevel = value;
+            ValidateRivers();
+            Refresh();
+        }
+    }
+
+    public bool IsUnderwater
+    {
+        get { return waterLevel > elevation; }
+    }
+
+    public float WaterSurfaceY
+    {
+        get { return (waterLevel + HexMetrics.waterElevationOffset) * HexMetrics.elevationStep; }
     }
 
 
@@ -201,7 +260,7 @@ public class HexCell : MonoBehaviour
         }
 
         HexCell neighbor = GetNeighbor(direction);
-        if(!neighbor || elevation < neighbor.elevation)
+        if(!isValidRiverDestination(neighbor))
         {
             return;
         }
@@ -214,11 +273,61 @@ public class HexCell : MonoBehaviour
 
         hasOutgoingRiver = true;
         outgoingRiver = direction;
-        RefreshSelfOnly();
 
         neighbor.RemoveIncomingRiver();
         neighbor.hasIncomingRiver = true;
         neighbor.incomingRiver = direction.Opposite();
-        neighbor.RefreshSelfOnly();
+
+        SetRoad((int)direction, false);
+    }
+
+    public void AddRoad(HexDirection direction)
+    {
+        if(!roads[(int)direction] && !HasRiverThroughEdge(direction) && GetElevationDifference(direction) <= 1)
+        {
+            SetRoad((int)direction, true);
+        }
+    }
+
+    public void RemoveRoads()
+    {
+        for(int i = 0; i < neighbors.Length; i++)
+        {
+            if(roads[i])
+            {
+                SetRoad(i, false);
+            }
+        }
+    }
+
+    void SetRoad(int index, bool state)
+    {
+        roads[index] = state;
+        neighbors[index].roads[(int)((HexDirection)index).Opposite()] = state;
+        neighbors[index].RefreshSelfOnly();
+        RefreshSelfOnly();
+    }
+
+    public int GetElevationDifference(HexDirection direction)
+    {
+        int difference = elevation - GetNeighbor(direction).elevation;
+        return difference >= 0 ? difference : -difference;
+    }
+
+    bool isValidRiverDestination(HexCell neighbor)
+    {
+        return neighbor && (elevation >= neighbor.elevation || waterLevel == neighbor.elevation);
+    }
+
+    void ValidateRivers()
+    {
+        if(hasOutgoingRiver && !isValidRiverDestination(GetNeighbor(outgoingRiver)))
+        {
+            RemoveOutgoingRiver();
+        }
+        if(hasIncomingRiver && !GetNeighbor(incomingRiver).isValidRiverDestination(this))
+        {
+            RemoveIncomingRiver();
+        }
     }
 }

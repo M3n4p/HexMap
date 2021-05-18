@@ -1,4 +1,4 @@
-Shader "Custom/River"
+Shader "Custom/Road"
 {
     Properties
     {
@@ -9,23 +9,23 @@ Shader "Custom/River"
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" "Queue"="Transparent+1" }
+        Tags { "RenderType"="Opaque" "Queue"="Geometry+1"}
         LOD 200
+        Offset -1, -1
 
         CGPROGRAM
         // Physically based Standard lighting model, and enable shadows on all light types
-        #pragma surface surf Standard alpha
+        #pragma surface surf Standard fullforwardshadows decal:blend
 
         // Use shader model 3.0 target, to get nicer looking lighting
         #pragma target 3.0
-
-        #include "Water.cginc"
 
         sampler2D _MainTex;
 
         struct Input
         {
             float2 uv_MainTex;
+            float3 worldPos;
         };
 
         half _Glossiness;
@@ -41,13 +41,18 @@ Shader "Custom/River"
 
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
-            float river = River(IN.uv_MainTex, _MainTex);
+            // Albedo comes from a texture tinted by color
+            float4 noise = tex2D(_MainTex, IN.worldPos.xz * 0.025);
+            fixed4 c = _Color * (noise.y * 0.75 + 0.25);
+            float blend = IN.uv_MainTex.x;
+            blend *= noise.x + 0.5;
+            blend = smoothstep(0.4, 0.7, blend);
 
-            fixed4 c = saturate(_Color + river);
             o.Albedo = c.rgb;
+            // Metallic and smoothness come from slider variables
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
-            o.Alpha = c.a;
+            o.Alpha = blend;
         }
         ENDCG
     }
